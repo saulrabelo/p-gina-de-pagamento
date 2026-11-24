@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#6d28d9">
+<title>PIX • Saul Rabelo Filho</title>
+<style>
+:root{color-scheme:light;--ink:#181326;--muted:#746d82;--purple:#6d28d9;--line:#e9e4f1;--bg:#f6f3fb}
+*{box-sizing:border-box}
+body{margin:0;background:linear-gradient(145deg,#f7f3ff,#f4f7ff);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:var(--ink);min-height:100vh;display:grid;place-items:center;padding:22px}
+main{width:min(100%,430px)}
+.card{background:#fff;border:1px solid var(--line);border-radius:25px;padding:25px;box-shadow:0 18px 55px #24104412}
+.brand{display:flex;align-items:center;gap:11px;margin-bottom:22px}
+.logo{width:43px;height:43px;border-radius:14px;background:#eee7ff;color:var(--purple);display:grid;place-items:center;font-size:23px;font-weight:800}
+.brand strong{display:block;font-size:15px}.brand small{color:var(--muted)}
+h1{font-size:25px;line-height:1.15;margin:0 0 8px}
+.sub{color:var(--muted);font-size:14px;line-height:1.5;margin:0 0 23px}
+label{display:block;font-size:13px;font-weight:700;margin-bottom:8px}
+.amount-wrap{display:flex;align-items:center;border:1.5px solid #d9c9f6;border-radius:15px;padding:0 14px;background:#fcfaff}
+.amount-wrap:focus-within{border-color:var(--purple);box-shadow:0 0 0 3px #6d28d91a}
+.currency{font-weight:700;color:var(--muted);font-size:17px}
+input{width:100%;border:0;outline:0;background:transparent;padding:17px 10px;font-size:25px;font-weight:750;color:var(--ink);min-width:0}
+button{width:100%;border:0;border-radius:14px;padding:15px 16px;font-size:15px;font-weight:750;cursor:pointer}
+.primary{background:var(--purple);color:white;margin-top:13px}
+.secondary{background:#f1ecfa;color:#4c258b;margin-top:10px}
+button:disabled{opacity:.5;cursor:not-allowed}
+.recipient{margin-top:22px;padding:15px;border:1px solid var(--line);border-radius:15px;display:flex;justify-content:space-between;gap:10px;align-items:center}
+.recipient small{display:block;color:var(--muted);font-size:11px;margin-bottom:4px}
+.recipient strong{font-size:14px}
+.pixmark{color:#159b75;font-weight:850;font-size:14px}
+#result{display:none;text-align:center;margin-top:20px;padding-top:20px;border-top:1px solid var(--line)}
+#qrcode{display:inline-grid;place-items:center;padding:12px;background:white;border:1px solid var(--line);border-radius:16px;min-width:230px;min-height:230px}
+#qrcode img,#qrcode canvas{max-width:100%;height:auto!important}
+.value{font-size:23px;font-weight:800;margin:13px 0 3px}
+.hint{font-size:12px;color:var(--muted);line-height:1.5}
+.status{min-height:18px;color:#b42318;font-size:12px;margin-top:8px}
+.footer{text-align:center;color:var(--muted);font-size:11px;margin:15px 5px 0;line-height:1.5}
+.notice{font-size:11px;color:var(--muted);line-height:1.45;margin-top:14px}
+@media(max-width:380px){.card{padding:20px}h1{font-size:23px}}
+</style>
+</head>
+<body>
+<main>
+<section class="card">
+  <div class="brand"><div class="logo">✳</div><div><strong>Pagamento via PIX</strong><small>Simples, rápido e direto</small></div></div>
+  <h1>Quanto você deseja pagar?</h1>
+  <p class="sub">Digite o valor e gere seu QR Code PIX. Confira os dados no aplicativo do seu banco antes de confirmar.</p>
+  <label for="amount">Valor do PIX</label>
+  <div class="amount-wrap"><span class="currency">R$</span><input id="amount" inputmode="decimal" autocomplete="off" placeholder="0,00" aria-label="Valor em reais"></div>
+  <button class="primary" id="generate">Gerar QR Code PIX</button>
+  <div class="status" id="status" role="status"></div>
+  <div class="recipient">
+    <div><small>VOCÊ ESTÁ PAGANDO PARA</small><strong>Saul Rabelo Filho</strong><br><small>Viamão – RS</small></div>
+    <div class="pixmark">PIX</div>
+  </div>
+  <section id="result">
+    <div id="qrcode" aria-label="QR Code PIX"></div>
+    <div class="value" id="shownValue"></div>
+    <p class="hint">Abra o aplicativo do seu banco e escaneie o QR Code.</p>
+    <button class="secondary" id="copy">Copiar código PIX</button>
+    <p class="hint" id="copyStatus" aria-live="polite"></p>
+  </section>
+  <p class="notice">O pagamento só é concluído depois da confirmação no aplicativo do banco. Esta página não confirma recebimentos automaticamente.</p>
+</section>
+<p class="footer">Pagamento voluntário • Confira o nome do recebedor e o valor antes de pagar.</p>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+const PIX_KEY = "saulrabelo@gmail.com";
+const RECEIVER = "SAUL RABELO FILHO";
+const CITY = "VIAMAO";
+const $ = id => document.getElementById(id);
+let payload = "";
+
+function field(id, value) {
+  const v = String(value);
+  return id + String(v.length).padStart(2, "0") + v;
+}
+function crc16(str) {
+  let crc = 0xFFFF;
+  for (let i = 0; i < str.length; i++) {
+    crc ^= str.charCodeAt(i) << 8;
+    for (let j = 0; j < 8; j++) crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) : (crc << 1);
+    crc &= 0xFFFF;
+  }
+  return crc.toString(16).toUpperCase().padStart(4, "0");
+}
+function makePix(amount) {
+  const merchantAccount = field("00", "br.gov.bcb.pix") + field("01", PIX_KEY);
+  const additional = field("05", "***");
+  let p = field("00", "01") +
+          field("26", merchantAccount) +
+          field("52", "0000") +
+          field("53", "986") +
+          field("54", amount.toFixed(2)) +
+          field("58", "BR") +
+          field("59", RECEIVER) +
+          field("60", CITY) +
+          field("62", additional) +
+          "6304";
+  return p + crc16(p);
+}
+function parseAmount(raw) {
+  let s = raw.trim().replace(/\s/g, "").replace(/^R\$/i, "");
+  if (!s) return NaN;
+  if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
+  const n = Number(s);
+  return Number.isFinite(n) ? n : NaN;
+}
+$("generate").addEventListener("click", () => {
+  $("status").textContent = "";
+  $("copyStatus").textContent = "";
+  const amount = parseAmount($("amount").value);
+  if (!Number.isFinite(amount) || amount <= 0 || amount > 99999999.99) {
+    $("status").textContent = "Digite um valor válido maior que zero.";
+    $("result").style.display = "none";
+    return;
+  }
+  if (typeof QRCode === "undefined") {
+    $("status").textContent = "Não foi possível carregar o gerador de QR Code. Verifique sua conexão e tente novamente.";
+    return;
+  }
+  payload = makePix(amount);
+  $("qrcode").innerHTML = "";
+  new QRCode($("qrcode"), {text: payload, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M});
+  $("shownValue").textContent = amount.toLocaleString("pt-BR", {style:"currency",currency:"BRL"});
+  $("result").style.display = "block";
+});
+$("copy").addEventListener("click", async () => {
+  if (!payload) return;
+  try {
+    await navigator.clipboard.writeText(payload);
+    $("copyStatus").textContent = "Código PIX copiado.";
+  } catch {
+    $("copyStatus").textContent = "Não foi possível copiar automaticamente. Tente novamente pelo navegador.";
+  }
+});
+$("amount").addEventListener("keydown", e => { if (e.key === "Enter") $("generate").click(); });
+</script>
+</body>
+</html>
